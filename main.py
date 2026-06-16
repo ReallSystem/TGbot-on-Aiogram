@@ -1,19 +1,33 @@
-from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message
-from aiogram.filters.command import Command, CommandStart
-from handlers import user 
+import asyncio
+import logging
+
+from bot.bot import create_bot
+from bot.dispatcher import create_dispatcher
+
 
 async def main():
-    bot = Bot(token = 'SKYNET_TOKEN')
-    dp = Dispatcher()
-    dp.include_routers(user)
-    await dp.start_polling(bot)
-    
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    )
+
+    # bot instance
+    bot = create_bot()
+
+    # dispatcher
+    dp = create_dispatcher()
+
+    try:
+        await dp.start_polling(bot)
+
+    finally:
+        await bot.session.close()
+
 
 if __name__ == "__main__":
     try:
-        import asyncio
         asyncio.run(main())
-    except KeyboardInterrupt:
-        print('Вербелик зупинився і це зробили ви') 
 
+    except KeyboardInterrupt:
+        print("Bot втомився")
