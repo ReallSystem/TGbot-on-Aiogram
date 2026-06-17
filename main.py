@@ -6,22 +6,21 @@ from bot.dispatcher import create_dispatcher
 
 
 async def main():
-
+    # Configure bot logging for application diagnostics.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
     )
 
-    # bot instance
+    # Create the bot instance and dispatcher for polling.
     bot = create_bot()
-
-    # dispatcher
     dp = create_dispatcher()
 
     try:
         await dp.start_polling(bot)
 
     finally:
+        # Always close the bot HTTP session when polling stops.
         await bot.session.close()
 
 

@@ -2,12 +2,14 @@
 import os
 from dotenv import load_dotenv
 
+# Load environment variables from the .env file.
 load_dotenv()
 
 TOKEN = os.getenv("BOT_TOKEN", "")
 if not TOKEN:
     raise ValueError("BOT_TOKEN не встановлений в .env файлі")
 
+# Read administrator IDs from the environment as a comma-separated list.
 ADMIN_IDS = list(
     map(
         int,
