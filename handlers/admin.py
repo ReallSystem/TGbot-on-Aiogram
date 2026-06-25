@@ -30,7 +30,7 @@ if not logger.handlers:
     logger.setLevel(logging.INFO)
 
 
-@router.message(Command("ban"), AdminFilter())
+@router.message(Command(commands=["ban"]), AdminFilter())
 async def cmd_ban(message: Message) -> None:
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
@@ -50,7 +50,7 @@ async def cmd_ban(message: Message) -> None:
         await message.answer(f"Користувач {target_user_id} вже заблокований.")
 
 
-@router.message(Command("unban"), AdminFilter())
+@router.message(Command(commands=["unban"]), AdminFilter())
 async def cmd_unban(message: Message) -> None:
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
@@ -70,7 +70,7 @@ async def cmd_unban(message: Message) -> None:
         await message.answer(f"Користувач {target_user_id} не був заблокований.")
 
 
-@router.message(Command("broadcast"), AdminFilter())
+@router.message(Command(commands=["broadcast"]), AdminFilter())
 async def cmd_broadcast(message: Message) -> None:
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2 or not parts[1].strip():
@@ -104,7 +104,7 @@ async def cmd_broadcast(message: Message) -> None:
     )
 
 
-@router.message(Command("users"), AdminFilter())
+@router.message(Command(commands=["users"]), AdminFilter())
 async def cmd_users(message: Message) -> None:
     users = get_all_registered_users()
     count = len(users)
@@ -119,7 +119,7 @@ async def cmd_users(message: Message) -> None:
     )
 
 
-@router.message(Command("stats"), AdminFilter())
+@router.message(Command(commands=["stats"]), AdminFilter())
 async def cmd_stats(message: Message) -> None:
     users = get_all_registered_users()
     total = len(users)

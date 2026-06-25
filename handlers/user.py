@@ -293,7 +293,13 @@ async def banned_user_callback(callback: CallbackQuery) -> None:
     await callback.answer(BANNED_MESSAGE, show_alert=True)
 
 
-@router.message(lambda message: message.from_user is not None and not is_user_banned(message.from_user.id))
+@router.message(
+    lambda message: (
+        message.from_user is not None
+        and not is_user_banned(message.from_user.id)
+        and not (message.text or "").startswith("/")
+    )
+)
 async def register_on_any_message(message: Message) -> None:
     register_user(message.from_user.id)
 
