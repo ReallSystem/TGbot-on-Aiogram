@@ -2,15 +2,21 @@ import logging
 from pathlib import Path
 
 from aiogram import Router
-from aiogram.filters import Command
+from aiogram.filters import BaseFilter, Command
 from aiogram.types import Message
 
 from config import ADMIN_IDS
 from handlers.user import (
     ban_user,
+    get_all_registered_users,
     get_unbanned_registered_users,
     unban_user,
 )
+
+
+class AdminFilter(BaseFilter):
+    async def __call__(self, message: Message) -> bool:
+        return bool(message.from_user and message.from_user.id in ADMIN_IDS)
 
 # Create router and logger for this handler module
 router = Router()
@@ -24,16 +30,8 @@ if not logger.handlers:
     logger.setLevel(logging.INFO)
 
 
-def is_admin(user_id: int) -> bool:
-    """Check if the sender is listed as an administrator."""
-    return user_id in ADMIN_IDS
-
-
-@router.message(Command("ban"))
+@router.message(Command("ban"), AdminFilter())
 async def cmd_ban(message: Message) -> None:
-    if not is_admin(message.from_user.id):
-        return
-
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
         await message.answer("Використання: /ban <user_id>")
@@ -52,11 +50,8 @@ async def cmd_ban(message: Message) -> None:
         await message.answer(f"Користувач {target_user_id} вже заблокований.")
 
 
-@router.message(Command("unban"))
+@router.message(Command("unban"), AdminFilter())
 async def cmd_unban(message: Message) -> None:
-    if not is_admin(message.from_user.id):
-        return
-
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
         await message.answer("Використання: /unban <user_id>")
@@ -75,11 +70,8 @@ async def cmd_unban(message: Message) -> None:
         await message.answer(f"Користувач {target_user_id} не був заблокований.")
 
 
-@router.message(Command("broadcast"))
+@router.message(Command("broadcast"), AdminFilter())
 async def cmd_broadcast(message: Message) -> None:
-    if not is_admin(message.from_user.id):
-        return
-
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2 or not parts[1].strip():
         await message.answer("Використання: /broadcast <повідомлення>")
@@ -109,4 +101,35 @@ async def cmd_broadcast(message: Message) -> None:
         message.from_user.id,
         sent,
         failed,
+    )
+
+
+@router.message(Command("users"), AdminFilter())
+async def cmd_users(message: Message) -> None:
+    users = get_all_registered_users()
+    count = len(users)
+    if count == 0:
+        await message.answer("Немає зареєстрованих користувачів.")
+        return
+
+    user_list_text = "\n".join(str(user_id) for user_id in users[:50])
+    more_text = "\n..." if count > 50 else ""
+    await message.answer(
+        f"Зареєстровані користувачі ({count}):\n{user_list_text}{more_text}"
+    )
+
+
+@router.message(Command("stats"), AdminFilter())
+async def cmd_stats(message: Message) -> None:
+    users = get_all_registered_users()
+    total = len(users)
+    unbanned = len(get_unbanned_registered_users())
+    banned = total - unbanned
+    await message.answer(
+        (
+            f"Статистика бота:\n"
+            f"Зареєстровані користувачі: {total}\n"
+            f"Незаблоковані користувачі: {unbanned}\n"
+            f"Заблоковані користувачі: {banned}"
+        )
     )
