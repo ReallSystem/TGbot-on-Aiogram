@@ -1,4 +1,6 @@
-﻿import logging
+﻿import json
+import logging
+import time
 from pathlib import Path
 
 from aiogram import F, Router
@@ -24,6 +26,22 @@ if not logger.handlers:
 # In-memory storage of selected language per user.
 # This is a simple user session map for language preference.
 USER_LANG: dict[int, str] = {}
+
+# Path to the local file where user registration and ban data is persisted.
+DATA_PATH = Path(__file__).resolve().parent.parent / "data"
+DATA_PATH.mkdir(exist_ok=True)
+USER_DATA_FILE = DATA_PATH / "users.json"
+
+# In-memory caches for registered users and banned users.
+USER_IDS: set[int] = set()
+BANNED_USERS: set[int] = set()
+BANNED_MESSAGE = (
+    "❌ Ви заблоковані. Зверніться до адміністратора."
+)
+
+# Rate limit support requests to avoid spam.
+RATE_LIMIT_WINDOW = 30  # seconds between support messages per user
+LAST_SUPPORT_REQUEST: dict[int, float] = {}
 
 # Localized bot texts for each supported language.
 # Keys are language codes and values are translation maps.
@@ -76,6 +94,7 @@ LANGUAGE_STRINGS = {
         ),
         "cancelled": "❌ You cancelled reply mode. You can continue working.",
         "lang_not_found": "❌ Language not found. Please try again.",
+        "rate_limit_wait": "⏳ Please wait {seconds} seconds before sending another request.",
         "book_not_found": "Book not found",
     },
 }
@@ -96,6 +115,96 @@ BOOKS = {
 
 # Mapping of admin message IDs to user IDs for reply forwarding.
 ADMIN_REPLY_MAP: dict[tuple[int, int], int] = {}
+
+def load_user_data() -> None:
+    """Load registered and banned users from disk into memory."""
+    global USER_IDS, BANNED_USERS
+    if not USER_DATA_FILE.exists():
+        USER_IDS = set()
+        BANNED_USERS = set()
+        return
+
+    try:
+        raw = json.loads(USER_DATA_FILE.read_text(encoding="utf-8"))
+        USER_IDS = set(raw.get("users", []))
+        BANNED_USERS = set(raw.get("banned", []))
+    except (json.JSONDecodeError, OSError):
+        USER_IDS = set()
+        BANNED_USERS = set()
+
+
+def save_user_data() -> None:
+    """Persist the current user and ban lists to disk."""
+    USER_DATA_FILE.write_text(
+        json.dumps(
+            {
+                "users": sorted(USER_IDS),
+                "banned": sorted(BANNED_USERS),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def register_user(user_id: int) -> None:
+    """Register a user when they start the bot, unless they are banned."""
+    if user_id in BANNED_USERS:
+        return
+    if user_id not in USER_IDS:
+        USER_IDS.add(user_id)
+        save_user_data()
+
+
+def ban_user(user_id: int) -> bool:
+    """Ban a user and persist the updated ban list."""
+    if user_id in BANNED_USERS:
+        return False
+    BANNED_USERS.add(user_id)
+    USER_IDS.add(user_id)
+    save_user_data()
+    return True
+
+
+def unban_user(user_id: int) -> bool:
+    """Remove a user from the ban list and persist changes."""
+    if user_id not in BANNED_USERS:
+        return False
+    BANNED_USERS.remove(user_id)
+    save_user_data()
+    return True
+
+
+def get_all_registered_users() -> list[int]:
+    return sorted(USER_IDS)
+
+
+def get_unbanned_registered_users() -> list[int]:
+    return sorted(USER_IDS.difference(BANNED_USERS))
+
+
+def is_user_banned(user_id: int) -> bool:
+    return user_id in BANNED_USERS
+
+
+def can_send_support_request(user_id: int) -> bool:
+    now = time.time()
+    next_allowed = LAST_SUPPORT_REQUEST.get(user_id, 0) + RATE_LIMIT_WINDOW
+    if now < next_allowed:
+        return False
+
+    LAST_SUPPORT_REQUEST[user_id] = now
+    return True
+
+
+def get_support_rate_limit_delay(user_id: int) -> int:
+    now = time.time()
+    next_allowed = LAST_SUPPORT_REQUEST.get(user_id, 0) + RATE_LIMIT_WINDOW
+    return max(0, round(next_allowed - now))
+
+
+load_user_data()
 
 # Get the currently selected language for the user or default to Ukrainian.
 def get_user_language(user_id: int) -> str:
@@ -151,6 +260,12 @@ async def notify_admins(message: Message, header: str) -> None:
 # Handle /start and show the language selection keyboard
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
+    if is_user_banned(message.from_user.id):
+        await message.answer(BANNED_MESSAGE)
+        return
+
+    # Save new users when they launch the bot for the first time.
+    register_user(message.from_user.id)
     await message.answer(
         get_text(message.from_user.id, "welcome"),
         reply_markup=LANGUAGE_SELECTION,
@@ -166,6 +281,17 @@ async def choose_language(callback: CallbackQuery) -> None:
         get_text(callback.from_user.id, "language_set"),
         reply_markup=main_keyboard(language),
     )
+
+# Handle banned users before any other message or callback
+@router.message(lambda message: message.from_user is not None and is_user_banned(message.from_user.id))
+async def banned_user_message(message: Message) -> None:
+    await message.answer(BANNED_MESSAGE)
+
+
+@router.callback_query(lambda callback: callback.from_user is not None and is_user_banned(callback.from_user.id))
+async def banned_user_callback(callback: CallbackQuery) -> None:
+    await callback.answer(BANNED_MESSAGE, show_alert=True)
+
 
 # Help command replies in the user's language
 @router.message(Command("help"))
@@ -208,6 +334,14 @@ async def check_book(callback: CallbackQuery) -> None:
 # Handle text support message from the user
 @router.message(SupportState.waiting_message)
 async def admin_message(message: Message, state: FSMContext) -> None:
+    if not can_send_support_request(message.from_user.id):
+        delay = get_support_rate_limit_delay(message.from_user.id)
+        await message.answer(
+            get_text(message.from_user.id, "rate_limit_wait").format(seconds=delay)
+        )
+        await state.clear()
+        return
+
     await notify_admins(message, header=get_text(message.from_user.id, "admin_message_header"))
     await message.answer(get_text(message.from_user.id, "message_sent"))
     await state.clear()
@@ -215,6 +349,14 @@ async def admin_message(message: Message, state: FSMContext) -> None:
 # Handle media support message from the user
 @router.message(SupportState.waiting_media)
 async def admin_media(message: Message, state: FSMContext) -> None:
+    if not can_send_support_request(message.from_user.id):
+        delay = get_support_rate_limit_delay(message.from_user.id)
+        await message.answer(
+            get_text(message.from_user.id, "rate_limit_wait").format(seconds=delay)
+        )
+        await state.clear()
+        return
+
     await notify_admins(message, header=get_text(message.from_user.id, "admin_media_header"))
     await message.answer(get_text(message.from_user.id, "media_sent"))
     await state.clear()
