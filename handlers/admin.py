@@ -104,8 +104,12 @@ async def cmd_broadcast(message: Message) -> None:
     )
 
 
-@router.message(Command(commands=["users"]), AdminFilter())
+@router.message(lambda message: message.text is not None and message.text.split(maxsplit=1)[0].lower().startswith("/users"))
 async def cmd_users(message: Message) -> None:
+    if not message.from_user or message.from_user.id not in ADMIN_IDS:
+        await message.answer("Тільки для адміністраторів.")
+        return
+
     users = get_all_registered_users()
     count = len(users)
     if count == 0:
@@ -119,8 +123,12 @@ async def cmd_users(message: Message) -> None:
     )
 
 
-@router.message(Command(commands=["stats"]), AdminFilter())
+@router.message(lambda message: message.text is not None and message.text.split(maxsplit=1)[0].lower().startswith("/stats"))
 async def cmd_stats(message: Message) -> None:
+    if not message.from_user or message.from_user.id not in ADMIN_IDS:
+        await message.answer("Тільки для адміністраторів.")
+        return
+
     users = get_all_registered_users()
     total = len(users)
     unbanned = len(get_unbanned_registered_users())
