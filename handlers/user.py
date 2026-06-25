@@ -293,6 +293,16 @@ async def banned_user_callback(callback: CallbackQuery) -> None:
     await callback.answer(BANNED_MESSAGE, show_alert=True)
 
 
+@router.message(lambda message: message.from_user is not None and not is_user_banned(message.from_user.id))
+async def register_on_any_message(message: Message) -> None:
+    register_user(message.from_user.id)
+
+
+@router.callback_query(lambda callback: callback.from_user is not None and not is_user_banned(callback.from_user.id))
+async def register_on_any_callback(callback: CallbackQuery) -> None:
+    register_user(callback.from_user.id)
+
+
 # Help command replies in the user's language
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
