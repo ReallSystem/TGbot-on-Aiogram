@@ -458,3 +458,14 @@ async def reply_to_user(message: Message) -> None:
             str(e),
         )
         await message.answer(f"❌ Помилка при надсиланні: {str(e)}")
+
+
+# Fallback handler for any unhandled message
+@router.message()
+async def echo_message(message: Message) -> None:
+    """Send the main keyboard to users who don't click buttons"""
+    language = get_user_language(message.from_user.id)
+    await message.answer(
+        "Оберіть опцію з меню 👇\nChoose an option from the menu 👇",
+        reply_markup=main_keyboard(language),
+    )
