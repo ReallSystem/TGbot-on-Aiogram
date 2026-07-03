@@ -293,17 +293,6 @@ async def banned_user_callback(callback: CallbackQuery) -> None:
     await callback.answer(BANNED_MESSAGE, show_alert=True)
 
 
-@router.message(
-    lambda message: (
-        message.from_user is not None
-        and not is_user_banned(message.from_user.id)
-        and not (message.text or "").startswith("/")
-    )
-)
-async def register_on_any_message(message: Message) -> None:
-    register_user(message.from_user.id)
-
-
 @router.callback_query(lambda callback: callback.from_user is not None and not is_user_banned(callback.from_user.id))
 async def register_on_any_callback(callback: CallbackQuery) -> None:
     register_user(callback.from_user.id)
@@ -464,6 +453,14 @@ async def reply_to_user(message: Message) -> None:
 @router.message()
 async def echo_message(message: Message) -> None:
     """Send the main keyboard to users who don't click buttons"""
+    # Register user on any message
+    register_user(message.from_user.id)
+    
+    # Skip if banned
+    if is_user_banned(message.from_user.id):
+        await message.answer(BANNED_MESSAGE)
+        return
+    
     language = get_user_language(message.from_user.id)
     await message.answer(
         "Оберіть опцію з меню 👇\nChoose an option from the menu 👇",
