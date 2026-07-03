@@ -3,6 +3,7 @@ import logging
 
 from bot.bot import create_bot
 from bot.dispatcher import create_dispatcher
+from db import init_db
 
 
 async def main():
@@ -11,6 +12,10 @@ async def main():
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
     )
+    
+    # Ініціалізувати БД
+    init_db()
+    logging.info("Database initialized")
 
     # Create the bot instance and dispatcher for polling.
     bot = create_bot()
