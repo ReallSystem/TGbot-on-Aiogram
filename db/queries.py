@@ -95,9 +95,6 @@ def get_user_count(db: Session):
     except SQLAlchemyError as e:
         logger.error(f"Database error in get_user_count: {e}")
         return 0
-def get_user_count(db: Session):
-    """Отримати кількість користувачів"""
-    return db.query(func.count(User.id)).scalar()
 
 
 # ===== ПОВІДОМЛЕННЯ =====

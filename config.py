@@ -25,7 +25,11 @@ except ValueError:
 if not ADMIN_IDS:
     raise ValueError("ADMIN_IDS містить невалідні значення")
 
-# Optional: Database URL (для поточного проекту SQLite)
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./bot_database.db").strip()
+# Database URL (автоматично встановлюється Railway для PostgreSQL)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    logger.warning("⚠️ DATABASE_URL не встановлена! Перевірте налаштування Railway або .env файл")
+    logger.info("🗂️ На Railway базу автоматично створюють у plugin'ах PostgreSQL")
 
-logger.info(f"Configuration loaded. Admin IDs: {len(ADMIN_IDS)}")
+logger.info(f"✅ Конфігурація завантажена. Admin IDs: {len(ADMIN_IDS)}")
+logger.info(f"🗄️ Database: {DATABASE_URL[:20]}..." if DATABASE_URL else "Database: не встановлена")
